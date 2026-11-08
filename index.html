@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
-    <title>BashaDrive Pro_v 10.8.0</title>
+    <title>BashaDrive Pro_v 10.9.0</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -77,7 +77,7 @@
         <div class="flex justify-between items-center">
             <div>
                 <h1 class="text-base font-black text-orange-500 italic leading-none">BASHADRIVE <span class="text-white">PRO</span></h1>
-                <p class="text-[9px] font-bold text-sky-400 uppercase tracking-widest">Menorca • V10.8.0 Sync & Alarma</p>
+                <p class="text-[9px] font-bold text-sky-400 uppercase tracking-widest">Menorca • V10.9.0 Dietas Exactas</p>
             </div>
             <div class="flex items-center gap-1.5">
                 <!-- BOTÓN TUTORIAL / INSTRUCCIONES -->
@@ -218,8 +218,9 @@
             <div class="text-xs text-gray-300 space-y-2 text-left bg-black/40 p-3 rounded-xl border border-white/5">
                 <p>• <strong>Auto-Centrado:</strong> La pantalla sitúa la tarjeta del día actual siempre en el centro.</p>
                 <p>• <strong>Acceso al Reloj:</strong> Toca cualquier casilla de horario para abrir directamente la alarma de tu dispositivo.</p>
-                <p>• <strong>Persistencia Total:</strong> Guarda la semana actual, pasada y futuras sin borrar datos viejos.</p>
-                <p>• <strong>Sincronización:</strong> Exporta o importa tu archivo de datos para mover tu calendario a otro móvil o tablet.</p>
+                <p>• <strong>Dietas Actualizadas:</strong> Lógica adaptada exactamente a las horas de comida y cena.</p>
+                <p>• <strong>Persistencia Total:</strong> Guarda la semana actual, pasada y futuras en IndexedDB sin borrar datos viejos.</p>
+                <p>• <strong>Sincronización:</strong> Exporta o importa tu archivo de datos para mover tu calendario a otro dispositivo.</p>
             </div>
             <button @click="cerrarTutorial()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl uppercase text-xs tracking-wider shadow-lg active:scale-95 transition">
                 ¡Entendido!
@@ -651,15 +652,15 @@
                     return total.toFixed(1);
                 },
 
+                // LÓGICA DE DIETAS CORREGIDA Y ADAPTADA A TUS REGLAS PERSONALES
                 calcularDietas(dia) {
-                    if (!dia.tramos || dia.tramos.length === 0 || dia.servicio === 'Día LIBRE') {
+                    if (!dia.tramos || dia.tramos.length === 0 || dia.servicio === 'Día LIBRE' || dia.servicio === 'SIN ASIGNAR') {
                         return { comida: false, cena: false };
                     }
                     const tramosValidos = dia.tramos.filter(t => t.entrada && t.salida);
                     if (tramosValidos.length === 0) return { comida: false, cena: false };
 
                     let totalMinutosAcumulados = 0;
-                    let primerEntradaMin = Infinity;
                     let ultimaSalidaMin = -Infinity;
                     let horaSalidaUltima = 0;
                     let minSalidaUltimo = 0;
@@ -674,7 +675,6 @@
 
                         totalMinutosAcumulados += (salMin - entMin);
 
-                        if (entMin < primerEntradaMin) primerEntradaMin = entMin;
                         if (salMin > ultimaSalidaMin) {
                             ultimaSalidaMin = salMin;
                             horaSalidaUltima = hS;
@@ -683,8 +683,6 @@
                     });
 
                     const totalHoras = totalMinutosAcumulados / 60;
-                    const primerHoraEntrada = Math.floor(primerEntradaMin / 60);
-
                     let comida = false;
                     let cena = false;
 
@@ -696,14 +694,22 @@
                     const esSalida1530Punto = (horaSalidaUltima === 15 && minSalidaUltimo === 30);
                     const esSalida2300Punto = (horaSalidaUltima === 23 && minSalidaUltimo === 0);
 
-                    if (primerHoraEntrada < 13 && horaSalidaUltima <= 17 && horaSalidaUltima >= 15) {
-                        if (totalHoras >= 9 && ultimaSalidaMin >= min1500) comida = true;
-                        else if (totalHoras >= 6 && ultimaSalidaMin >= min1530) comida = true;
+                    // REGLAS DE COMIDA:
+                    // 1. Trabajar más de 9h.
+                    // 2. O terminar a las 15:00 o después (incluye 15:00 en punto).
+                    // 3. O trabajar más de 6h y terminar a las 15:30 o después (incluye 15:30 en punto).
+                    if (totalHoras > 9) {
+                        comida = true;
+                    } else if (ultimaSalidaMin >= min1500 || esSalida1500Punto) {
+                        comida = true;
+                    } else if (totalHoras > 6 && (ultimaSalidaMin >= min1530 || esSalida1530Punto)) {
+                        comida = true;
                     }
-                    if (primerHoraEntrada < 13 && (esSalida1500Punto || esSalida1530Punto)) comida = true;
 
-                    if (primerHoraEntrada >= 13) {
-                        if (ultimaSalidaMin >= min2300 || esSalida2300Punto) cena = true;
+                    // REGLAS DE CENA:
+                    // Terminar a las 23:00 o después (incluye 23:00 en punto).
+                    if (ultimaSalidaMin >= min2300 || esSalida2300Punto) {
+                        cena = true;
                     }
 
                     return { comida, cena };
